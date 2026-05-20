@@ -22,15 +22,16 @@ HF_TOKEN = os.environ.get("HF_TOKEN")
 API_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-VL-7B-Instruct"
 
 
+from pydantic import BaseModel
+
+class PetImage(BaseModel):
+    image: str
+
 @app.post("/analyze-pet")
-async def analyze_pet(file: UploadFile = File(...)):
+async def analyze_pet(payload: PetImage):
     try:
-        # 1. Read the image uploaded from your phone camera
-        image_bytes = await file.read()
-        
-        # 2. Convert the image to a base64 string so the API can read it
-        base64_image = base64.b64encode(image_bytes).decode("utf-8")
-        data_url = f"data:image/jpeg;base64,{base64_image}"
+        # 1. The image is already a base64 string from React Native
+        data_url = f"data:image/jpeg;base64,{payload.image}"
         
         # 3. Construct the prompt for Qwen's deep visual research & injury tracking
         payload = {

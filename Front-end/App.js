@@ -1,17 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-const result = await response.json();
-
-// Double check this matches your exact Metro IP!
-const BACKEND_URL = 'https://tired-socks-relax.loca.lt';
-
-if (response.ok && result.analysis) {
-  // Directly set the string into your state variable
-  setAnalysisResult(result.analysis); 
-} else {
-  alert("Error: " + (result.error || "Could not read analysis raw data."));
-}
+// Paste your new Railway URL here (e.g., 'https://animal-vet-backend-production.up.railway.app')
+const BACKEND_URL = 'https://animal-vet-production.up.railway.app';
 
 export default function App() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -38,34 +29,27 @@ export default function App() {
   const takePicture = async () => {
     if (cameraRef.current) {
       try {
-        const options = { quality: 0.7 };
+        const options = { quality: 0.7, base64: true };
         const data = await cameraRef.current.takePictureAsync(options);
         setPhoto(data.uri);
-        sendImageToBackend(data.uri);
+        sendImageToBackend(data.base64);
       } catch (err) {
         setAnalysis(`Camera Capture Error: ${err.message}`);
       }
     }
   };
 
-  const sendImageToBackend = async (imageUri) => {
+  const sendImageToBackend = async (base64Image) => {
     setLoading(true);
     setAnalysis(null);
-
-    const formData = new FormData();
-    formData.append('file', {
-      uri: imageUri,
-      name: 'pet_image.jpg',
-      type: 'image/jpeg',
-    });
 
     try {
       const response = await fetch(`${BACKEND_URL}/analyze-pet`, {
         method: 'POST',
-        body: formData,
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ image: base64Image }),
       });
 
       const result = await response.json();
@@ -99,7 +83,7 @@ export default function App() {
       ) : (
         <View style={styles.previewContainer}>
           <Image source={{ uri: photo }} style={styles.previewImage} />
-          
+
           <ScrollView style={styles.analysisContainer}>
             {loading && (
               <View style={styles.loadingContainer}>
