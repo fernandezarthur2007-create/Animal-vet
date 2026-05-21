@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 // Paste your new Railway URL here (e.g., 'https://animal-vet-backend-production.up.railway.app')
-const BACKEND_URL = 'https://animal-vet-production.up.railway.app';
+const BACKEND_URL = 'http://localhost:8000';
 
 export default function App() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -29,34 +29,47 @@ export default function App() {
   const takePicture = async () => {
     if (cameraRef.current) {
       try {
-        const options = { quality: 0.7, base64: true };
+        const options = { quality: 0.7 };
         const data = await cameraRef.current.takePictureAsync(options);
         setPhoto(data.uri);
-        sendImageToBackend(data.base64);
+        sendImageToBackend(data.uri);
       } catch (err) {
         setAnalysis(`Camera Capture Error: ${err.message}`);
       }
     }
   };
 
-  const sendImageToBackend = async (base64Image) => {
+  const sendImageToBackend = async (imageUri) => {
     setLoading(true);
     setAnalysis(null);
 
     try {
+      // For React Native Web, we must fetch the data URI to convert it into a true Blob
+      const uriResponse = await fetch(imageUri);
+      const blob = await uriResponse.blob();
+
+      const formData = new FormData();
+      formData.append('file', blob, 'pet_image.jpg');
+
       const response = await fetch(`${BACKEND_URL}/analyze-pet`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ image: base64Image }),
+        body: formData,
       });
 
       const result = await response.json();
+      console.log("🔥 SERVER PAYLOAD RECEIVED:", result); // Debugging checkpoint
+      
       if (response.ok) {
-        setAnalysis(result.analysis);
+        // Since we now receive a beautiful JSON object, we save it directly to state!
+        let safeData = result.analysis || result.message || result.error;
+        setAnalysis(safeData);
       } else {
-        setAnalysis(`Server Error: ${result.detail || 'Failed to analyze'}`);
+        console.error("❌ SERVER ERROR:", result); // Debugging checkpoint
+        // Fix for [object Object] rendering
+        const errorDetail = typeof result.detail === 'string' 
+          ? result.detail 
+          : JSON.stringify(result.detail, null, 2);
+        setAnalysis(`Server Error: \n${errorDetail}`);
       }
     } catch (error) {
       setAnalysis(`Network Connection Error.\n\nMake sure your phone and laptop are on the EXACT same Wi-Fi network name.\n\nDetails: ${error.message}`);
@@ -91,7 +104,37 @@ export default function App() {
                 <Text style={styles.loadingText}>Sending photo to Vet AI engine...</Text>
               </View>
             )}
-            {analysis && <Text style={styles.analysisText}>{analysis}</Text>}
+            {analysis && typeof analysis === 'object' && !analysis.error ? (
+              <View style={styles.dashboardContainer}>
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Emotion & Confidence</Text>
+                  <View style={styles.row}>
+                    <View style={[styles.badge, { backgroundColor: '#e0f2fe' }]}>
+                      <Text style={styles.badgeText}>{analysis.pet_emotion || 'Unknown'}</Text>
+                    </View>
+                    <View style={[styles.badge, { backgroundColor: '#dcfce7' }]}>
+                      <Text style={styles.badgeText}>{analysis.confidence_score || 0}% Confident</Text>
+                    </View>
+                  </View>
+                </View>
+                
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Health Observations</Text>
+                  {(analysis.health_observations || []).map((obs, i) => (
+                    <Text key={i} style={styles.listItem}>• {obs}</Text>
+                  ))}
+                </View>
+
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Actionable Advice</Text>
+                  <Text style={styles.cardText}>{analysis.actionable_advice}</Text>
+                </View>
+              </View>
+            ) : analysis ? (
+              <View style={styles.resultBox}>
+                <Text style={styles.analysisText}>{typeof analysis === 'string' ? analysis : JSON.stringify(analysis)}</Text>
+              </View>
+            ) : null}
           </ScrollView>
 
           {!loading && (
@@ -114,10 +157,36 @@ const styles = StyleSheet.create({
   previewContainer: { flex: 1, backgroundColor: '#f5f5f5', paddingTop: 40 },
   previewImage: { width: '100%', height: 260, resizeMode: 'cover' },
   analysisContainer: { flex: 1, padding: 20 },
-  analysisText: { fontSize: 16, lineHeight: 24, color: '#333' },
+  resultBox: {
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    marginTop: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  analysisText: { 
+    fontSize: 16, 
+    lineHeight: 26, 
+    color: '#111827', // Very dark gray/black for high contrast 
+    fontWeight: '500' 
+  },
   loadingContainer: { alignItems: 'center', marginTop: 40 },
   loadingText: { marginTop: 10, fontSize: 16, color: '#666', fontWeight: '500' },
   button: { backgroundColor: '#007AFF', padding: 15, borderRadius: 8, alignSelf: 'center' },
   resetButton: { backgroundColor: '#007AFF', padding: 15, margin: 20, borderRadius: 8, alignItems: 'center' },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  dashboardContainer: { width: '100%', paddingBottom: 20 },
+  card: { backgroundColor: '#fff', padding: 15, borderRadius: 10, marginBottom: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2, borderWidth: 1, borderColor: '#eee' },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: '#374151', marginBottom: 10 },
+  cardText: { fontSize: 15, color: '#4b5563', lineHeight: 22 },
+  row: { flexDirection: 'row', gap: 10 },
+  badge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  badgeText: { fontSize: 14, fontWeight: '600', color: '#1e293b' },
+  listItem: { fontSize: 15, color: '#4b5563', lineHeight: 24, marginBottom: 4 },
 });
