@@ -20,21 +20,21 @@ load_dotenv()
 
 app = FastAPI()
 
-AI_RESPONSE_SCHEMA = types.Schema(
-    type="object",
-    properties={
-        "reply_text": types.Schema(type="string"),
-        "is_pet_related": types.Schema(type="boolean"),
-        "pet_emotion": types.Schema(type="string"),
-        "confidence_score": types.Schema(type="integer"),
-        "health_observations": types.Schema(
-            type="array",
-            items=types.Schema(type="string"),
-        ),
-        "actionable_advice": types.Schema(type="string"),
+AI_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "reply_text": {"type": "string"},
+        "is_pet_related": {"type": "boolean"},
+        "pet_emotion": {"type": "string"},
+        "confidence_score": {"type": "integer"},
+        "health_observations": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "actionable_advice": {"type": "string"},
     },
-    required=["reply_text", "is_pet_related"],
-)
+    "required": ["reply_text", "is_pet_related"],
+}
 
 # Enforce full CORS permissions so mobile devices connect cleanly
 app.add_middleware(
@@ -120,4 +120,12 @@ async def analyze_pet(
 
     except Exception as e:
         print(f"Server Error Exception Logs: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Backend Error: {str(e)}")
+        return {
+            "success": False,
+            "reply_text": "",
+            "is_pet_related": False,
+            "pet_emotion": "None",
+            "confidence_score": 0,
+            "health_observations": [],
+            "actionable_advice": str(e),
+        }
