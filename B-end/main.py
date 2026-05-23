@@ -16,7 +16,8 @@ class ChatResponse(BaseModel):
     health_observations: list[str] = []
     actionable_advice: Optional[str] = "None"
 
-load_dotenv()
+dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(dotenv_path=dotenv_path)
 
 app = FastAPI()
 
@@ -45,7 +46,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip().lstrip("-")
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY not set. Add it to B-end/.env")
 client = genai.Client(api_key=GEMINI_API_KEY)
