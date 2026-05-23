@@ -20,6 +20,22 @@ load_dotenv()
 
 app = FastAPI()
 
+AI_RESPONSE_SCHEMA = types.Schema(
+    type="object",
+    properties={
+        "reply_text": types.Schema(type="string"),
+        "is_pet_related": types.Schema(type="boolean"),
+        "pet_emotion": types.Schema(type="string"),
+        "confidence_score": types.Schema(type="integer"),
+        "health_observations": types.Schema(
+            type="array",
+            items=types.Schema(type="string"),
+        ),
+        "actionable_advice": types.Schema(type="string"),
+    },
+    required=["reply_text", "is_pet_related"],
+)
+
 # Enforce full CORS permissions so mobile devices connect cleanly
 app.add_middleware(
     CORSMiddleware,
@@ -71,12 +87,25 @@ async def analyze_pet(
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
                     response_mime_type="application/json",
-                    response_schema=ChatResponse,
+                    response_schema=AI_RESPONSE_SCHEMA,
                 ),
             )
             
         response = await run_in_threadpool(call_gemini)
-        analysis_dict = json.loads(response.text)
+        response_text = getattr(response, "text", None)
+        if not response_text:
+            raise HTTPException(
+                status_code=502,
+                detail="AI service returned an empty response."
+            )
+
+        try:
+            analysis_dict = json.loads(response_text)
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=502,
+                detail=f"AI response was not valid JSON: {response_text}"
+            )
 
         # 4. Formatted nested structure payload sent back to your React Native view engine
         return {
