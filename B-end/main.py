@@ -85,9 +85,9 @@ async def analyze_pet(
                 model='gemini-2.5-flash',
                 contents=contents,
                 config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    response_mime_type="application/json",
-                    response_schema=AI_RESPONSE_SCHEMA,
+                    systemInstruction=system_prompt,
+                    responseMimeType="application/json",
+                    responseSchema=AI_RESPONSE_SCHEMA,
                 ),
             )
             
