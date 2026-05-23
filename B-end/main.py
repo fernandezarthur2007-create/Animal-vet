@@ -1,19 +1,26 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
+from typing import Optional
 import json
+import os
+from dotenv import load_dotenv
 
-class PetAnalysis(BaseModel):
-    pet_emotion: str
-    confidence_score: int
-    health_observations: list[str]
-    actionable_advice: str
+class ChatResponse(BaseModel):
+    reply_text: str
+    is_pet_related: bool
+    pet_emotion: Optional[str] = "None"
+    confidence_score: Optional[int] = 0
+    health_observations: list[str] = []
+    actionable_advice: Optional[str] = "None"
+
+load_dotenv()
 
 app = FastAPI()
 
-# Enable CORS so your phone or web app can communicate safely
+# Enforce full CORS permissions so mobile devices connect cleanly
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,59 +29,66 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize the Gemini client using the modern SDK
-GEMINI_API_KEY = "AIzaSyAxtTu9WQBWZf6eI5oVplt4YdxFdR69kXk"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    raise RuntimeError("GEMINI_API_KEY not set. Add it to B-end/.env")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 @app.post("/analyze-pet")
-async def analyze_pet(file: UploadFile = File(...)):
+async def analyze_pet(
+    file: Optional[UploadFile] = File(None), 
+    user_message: Optional[str] = Form(None)
+):
     try:
-        print(f"Received file: {file.filename} with content type {file.content_type}")
-        # 1. Read raw image bytes directly from the FastAPI stream
-        image_bytes = await file.read()
+        contents = []
         
-        # Fallback to jpeg if the frontend doesn't provide a mime type
-        mime_type = file.content_type if file.content_type else "image/jpeg"
+        # 1. Image extraction processing pipeline
+        if file:
+            image_bytes = await file.read()
+            mime_type = file.content_type if file.content_type else "image/jpeg"
+            image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+            contents.append(image_part)
+            
+        # 2. Extract string content message
+        text_query = user_message if user_message else "Analyze this photo."
+        contents.append(text_query)
 
-        # 2. Package the raw bytes into a Gemini Part object
-        image_part = types.Part.from_bytes(
-            data=image_bytes,
-            mime_type=mime_type,
-        )
+        # 3. Model parameters and structural guidelines
+        system_prompt = os.getenv("SYSTEM_PROMPT", (
+            "You are a specialized Pet Care & Veterinary Chatbot Assistant. "
+            "CRITICAL PROTOCOL: You must ONLY talk about pets, domestic animals, and veterinary care. "
+            "If the user asks about unrelated topics (e.g., coding, cooking, general history, non-animal tasks), "
+            "you must set 'is_pet_related' to false and politely refuse to answer, reminding them you are a pet assistant. "
+            "If an image is present, analyze visual signs of injury, distress, or mood. "
+            "Format your reply text and structured metric keys into the required JSON schema fields perfectly." 
+        ))
 
-        # 3. Define the expert veterinary prompt
-        prompt = (
-            "You are an expert veterinary AI. Analyze this animal closely. "
-            "1. Detect any visual signs of physical injury, pain, or emotional distress. "
-            "2. Provide details on behavior tracking or structural abnormalities. "
-            "3. Give a comprehensive research overview of what you see to assist the user."
-        )
-
-        # 4. Fire the request to Gemini 2.5 Flash for lightning-fast reasoning
-        print("Sending raw bytes to Gemini 2.5 Flash...")
         from fastapi.concurrency import run_in_threadpool
-        
         def call_gemini():
             return client.models.generate_content(
                 model='gemini-2.5-flash',
-                contents=[image_part, prompt],
+                contents=contents,
                 config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
                     response_mime_type="application/json",
-                    response_schema=PetAnalysis,
+                    response_schema=ChatResponse,
                 ),
             )
             
         response = await run_in_threadpool(call_gemini)
-        
-        print("Successfully received analysis from Gemini!")
-        
-        # Parse the JSON string from Gemini into a Python dictionary
         analysis_dict = json.loads(response.text)
-        
-        # Return cleanly matching the key your React Native frontend expects
-        return {"analysis": analysis_dict}
+
+        # 4. Formatted nested structure payload sent back to your React Native view engine
+        return {
+            "success": True,
+            "reply_text": analysis_dict.get("reply_text", "No response text found."),
+            "is_pet_related": analysis_dict.get("is_pet_related", True),
+            "pet_emotion": analysis_dict.get("pet_emotion", "None"),
+            "confidence_score": analysis_dict.get("confidence_score", 0),
+            "health_observations": analysis_dict.get("health_observations", []),
+            "actionable_advice": analysis_dict.get("actionable_advice", "None")
+        }
 
     except Exception as e:
-        print(f"Server Error: {str(e)}")
-        # Guarantee a 500 error is thrown so React Native catches it in the 'else' block
+        print(f"Server Error Exception Logs: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Backend Error: {str(e)}")

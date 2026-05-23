@@ -1,29 +1,32 @@
 {
   "expo": {
-    "name": "F-end",
-    "slug": "F-end",
+    "name": "animal-vet",
+    "slug": "animal-vet",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      "package": "com.arthur.animalvet",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Paws & Chat to access your camera to scan pet injuries."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "560a301e-8ffc-411d-af6c-3c2731a0c458"
+      }
     }
   }
 }
